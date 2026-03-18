@@ -7,6 +7,8 @@ const resolveControlUiLinksMock = vi.hoisted(() => vi.fn());
 const detectBrowserOpenSupportMock = vi.hoisted(() => vi.fn());
 const openUrlMock = vi.hoisted(() => vi.fn());
 const formatControlUiSshHintMock = vi.hoisted(() => vi.fn());
+const probeGatewayReachableMock = vi.hoisted(() => vi.fn().mockResolvedValue({ ok: true }));
+const waitForGatewayReachableMock = vi.hoisted(() => vi.fn().mockResolvedValue({ ok: true }));
 const copyToClipboardMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../config/config.js", () => ({
@@ -19,6 +21,12 @@ vi.mock("./onboard-helpers.js", () => ({
   detectBrowserOpenSupport: detectBrowserOpenSupportMock,
   openUrl: openUrlMock,
   formatControlUiSshHint: formatControlUiSshHintMock,
+  probeGatewayReachable: probeGatewayReachableMock,
+  waitForGatewayReachable: waitForGatewayReachableMock,
+}));
+
+vi.mock("../cli/command-format.js", () => ({
+  formatCliCommand: (cmd: string) => cmd,
 }));
 
 vi.mock("../infra/clipboard.js", () => ({
@@ -64,6 +72,8 @@ describe("dashboardCommand", () => {
     detectBrowserOpenSupportMock.mockClear();
     openUrlMock.mockClear();
     formatControlUiSshHintMock.mockClear();
+    probeGatewayReachableMock.mockClear();
+    waitForGatewayReachableMock.mockClear();
     copyToClipboardMock.mockClear();
   });
 

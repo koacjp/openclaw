@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import fs from "node:fs/promises";
+import { sanitizeForHttpHeader } from "../../utils/normalize-secret-input.js";
 import type { ThinkLevel } from "../../auto-reply/thinking.js";
 import { generateSecureToken } from "../../infra/secure-random.js";
 import { getGlobalHookRunner } from "../../plugins/hook-runner-global.js";
@@ -587,20 +588,21 @@ export async function runEmbeddedPiAgent(
           lastProfileId = resolvedProfileId;
           return;
         }
+        const safeApiKey = sanitizeForHttpHeader(apiKeyInfo.apiKey);
         if (model.provider === "github-copilot") {
           const { resolveCopilotApiToken } =
             await import("../../providers/github-copilot-token.js");
           const copilotToken = await resolveCopilotApiToken({
-            githubToken: apiKeyInfo.apiKey,
+            githubToken: safeApiKey,
           });
           authStorage.setRuntimeApiKey(model.provider, copilotToken.token);
           if (copilotTokenState) {
-            copilotTokenState.githubToken = apiKeyInfo.apiKey;
+            copilotTokenState.githubToken = safeApiKey;
             copilotTokenState.expiresAt = copilotToken.expiresAt;
             scheduleCopilotRefresh();
           }
         } else {
-          authStorage.setRuntimeApiKey(model.provider, apiKeyInfo.apiKey);
+          authStorage.setRuntimeApiKey(model.provider, safeApiKey);
         }
         lastProfileId = apiKeyInfo.profileId;
       };

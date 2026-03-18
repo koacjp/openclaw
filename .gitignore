@@ -121,3 +121,12 @@ dist/protocol.schema.json
 
 # Synthing
 **/.stfolder/
+
+# LINE Bot specific (avoid sensitive data)
+line-bot/.env
+line-bot/agent.log
+line-bot/*_profile/
+line-bot/*.png
+line-bot/reply_history.json
+line-bot/node_modules/
+line-portable/

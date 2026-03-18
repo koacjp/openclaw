@@ -1,5 +1,5 @@
 import path from "node:path";
-import { normalizeWindowsPathForComparison } from "../infra/path-guards.js";
+import { isPathInside, normalizeWindowsPathForComparison } from "../infra/path-guards.js";
 import { resolveSandboxInputPath } from "./sandbox-paths.js";
 
 type RelativePathOptions = {
@@ -113,4 +113,36 @@ export function toRelativeSandboxPath(
 
 export function resolvePathFromInput(filePath: string, cwd: string): string {
   return path.normalize(resolveSandboxInputPath(filePath, cwd));
+}
+
+/**
+ * Resolve a path to the first matching root and its relative path.
+ * Used when tools.fs.allowedRoots is set: path must be under one of the roots.
+ */
+export function findRootAndRelative(
+  candidate: string,
+  roots: string[],
+  options?: { cwd?: string },
+): { root: string; relative: string } {
+  if (roots.length === 0) {
+    throw new Error("allowedRoots is empty");
+  }
+  const cwd = options?.cwd ?? path.resolve(roots[0]);
+  const resolved = path.resolve(resolveSandboxInputPath(candidate, cwd));
+  for (const r of roots) {
+    const rootResolved = path.resolve(r);
+    if (!isPathInside(rootResolved, resolved)) {
+      continue;
+    }
+    if (process.platform === "win32") {
+      const rootNorm = normalizeWindowsPathForComparison(rootResolved);
+      const targetNorm = normalizeWindowsPathForComparison(resolved);
+      const relative = path.win32.relative(rootNorm, targetNorm);
+      return { root: rootResolved, relative: relative || "." };
+    }
+    const relative = path.relative(rootResolved, resolved);
+    return { root: rootResolved, relative: relative || "." };
+  }
+  const rootsList = roots.slice(0, 3).join(", ") + (roots.length > 3 ? "…" : "");
+  throw new Error(`Path escapes allowed roots (${rootsList}): ${candidate}`);
 }

@@ -19,6 +19,12 @@ vi.mock("./onboard-helpers.js", () => ({
   detectBrowserOpenSupport: vi.fn(),
   openUrl: vi.fn(),
   formatControlUiSshHint: vi.fn(() => "ssh hint"),
+  probeGatewayReachable: vi.fn().mockResolvedValue({ ok: true }),
+  waitForGatewayReachable: vi.fn().mockResolvedValue({ ok: true }),
+}));
+
+vi.mock("../cli/command-format.js", () => ({
+  formatCliCommand: (cmd: string) => cmd,
 }));
 
 vi.mock("../infra/clipboard.js", () => ({

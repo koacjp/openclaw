@@ -20,6 +20,7 @@ import { resolveSignalReactionLevel } from "../../signal/reaction-level.js";
 import { resolveTelegramInlineButtonsScope } from "../../telegram/inline-buttons.js";
 import { resolveTelegramReactionLevel } from "../../telegram/reaction-level.js";
 import { buildTtsSystemPromptHint } from "../../tts/tts.js";
+import { sanitizeForHttpHeader } from "../../utils/normalize-secret-input.js";
 import { resolveUserPath } from "../../utils.js";
 import { normalizeMessageChannel } from "../../utils/message-channel.js";
 import { isReasoningTagProvider } from "../../utils/provider-utils.js";
@@ -297,14 +298,17 @@ export async function compactEmbeddedPiSessionDirect(
           `No API key resolved for provider "${model.provider}" (auth mode: ${apiKeyInfo.mode}).`,
         );
       }
-    } else if (model.provider === "github-copilot") {
-      const { resolveCopilotApiToken } = await import("../../providers/github-copilot-token.js");
-      const copilotToken = await resolveCopilotApiToken({
-        githubToken: apiKeyInfo.apiKey,
-      });
-      authStorage.setRuntimeApiKey(model.provider, copilotToken.token);
     } else {
-      authStorage.setRuntimeApiKey(model.provider, apiKeyInfo.apiKey);
+      const safeApiKey = sanitizeForHttpHeader(apiKeyInfo.apiKey);
+      if (model.provider === "github-copilot") {
+        const { resolveCopilotApiToken } = await import("../../providers/github-copilot-token.js");
+        const copilotToken = await resolveCopilotApiToken({
+          githubToken: safeApiKey,
+        });
+        authStorage.setRuntimeApiKey(model.provider, copilotToken.token);
+      } else {
+        authStorage.setRuntimeApiKey(model.provider, safeApiKey);
+      }
     }
   } catch (err) {
     const reason = describeUnknownError(err);

@@ -12,7 +12,7 @@ import {
 import { detectMime } from "../media/mime.js";
 import { sniffMimeFromBase64 } from "../media/sniff-mime-from-base64.js";
 import type { ImageSanitizationLimits } from "./image-sanitization.js";
-import { toRelativeWorkspacePath } from "./path-policy.js";
+import { findRootAndRelative, toRelativeWorkspacePath } from "./path-policy.js";
 import { wrapHostEditToolWithPostWriteRecovery } from "./pi-tools.host-edit.js";
 import {
   CLAUDE_PARAM_GROUPS,
@@ -354,6 +354,28 @@ export function wrapToolWorkspaceRootGuard(tool: AnyAgentTool, root: string): An
   return wrapToolWorkspaceRootGuardWithOptions(tool, root);
 }
 
+/** Guard: allow path only if it is under one of the allowed roots. */
+export function wrapToolWorkspaceRootGuardAllowedRoots(
+  tool: AnyAgentTool,
+  allowedRoots: string[],
+): AnyAgentTool {
+  const cwd = allowedRoots[0] ?? path.resolve(".");
+  return {
+    ...tool,
+    execute: async (toolCallId, args, signal, onUpdate) => {
+      const normalized = normalizeToolParams(args);
+      const record =
+        normalized ??
+        (args && typeof args === "object" ? (args as Record<string, unknown>) : undefined);
+      const filePath = record?.path;
+      if (typeof filePath === "string" && filePath.trim()) {
+        findRootAndRelative(filePath, allowedRoots, { cwd });
+      }
+      return tool.execute(toolCallId, normalized ?? args, signal, onUpdate);
+    },
+  };
+}
+
 function mapContainerPathToWorkspaceRoot(params: {
   filePath: string;
   root: string;
@@ -472,12 +494,39 @@ export function createHostWorkspaceWriteTool(root: string, options?: { workspace
   return wrapToolParamNormalization(base, CLAUDE_PARAM_GROUPS.write);
 }
 
+/** Write tool restricted to paths under any of the given roots (tools.fs.allowedRoots). */
+export function createHostWorkspaceWriteToolWithAllowedRoots(roots: string[]): AnyAgentTool {
+  const cwd = roots[0] ?? path.resolve(".");
+  const base = createWriteTool(cwd, {
+    operations: createHostWriteOperationsForAllowedRoots(roots),
+  }) as unknown as AnyAgentTool;
+  return wrapToolParamNormalization(base, CLAUDE_PARAM_GROUPS.write);
+}
+
 export function createHostWorkspaceEditTool(root: string, options?: { workspaceOnly?: boolean }) {
   const base = createEditTool(root, {
     operations: createHostEditOperations(root, options),
   }) as unknown as AnyAgentTool;
   const withRecovery = wrapHostEditToolWithPostWriteRecovery(base, root);
   return wrapToolParamNormalization(withRecovery, CLAUDE_PARAM_GROUPS.edit);
+}
+
+/** Edit tool restricted to paths under any of the given roots (tools.fs.allowedRoots). */
+export function createHostWorkspaceEditToolWithAllowedRoots(roots: string[]): AnyAgentTool {
+  const cwd = roots[0] ?? path.resolve(".");
+  const base = createEditTool(cwd, {
+    operations: createHostEditOperationsForAllowedRoots(roots),
+  }) as unknown as AnyAgentTool;
+  const withRecovery = wrapHostEditToolWithPostWriteRecovery(base, cwd, { allowedRoots: roots });
+  return wrapToolParamNormalization(withRecovery, CLAUDE_PARAM_GROUPS.edit);
+}
+
+/** Read tool restricted to paths under any of the given roots (tools.fs.allowedRoots). */
+export function createReadToolWithAllowedRoots(roots: string[]): AnyAgentTool {
+  const cwd = roots[0] ?? path.resolve(".");
+  return createReadTool(cwd, {
+    operations: createHostReadOperationsForAllowedRoots(roots),
+  }) as unknown as AnyAgentTool;
 }
 
 export function createOpenClawReadTool(
@@ -592,6 +641,89 @@ function createHostWriteOperations(root: string, options?: { workspaceOnly?: boo
         data: content,
         mkdir: true,
       });
+    },
+  } as const;
+}
+
+function createHostWriteOperationsForAllowedRoots(roots: string[]) {
+  const cwd = roots[0] ?? path.resolve(".");
+  return {
+    mkdir: async (dir: string) => {
+      const { root, relative } = findRootAndRelative(dir, roots, { cwd });
+      const resolved = path.resolve(root, relative);
+      await fs.mkdir(resolved, { recursive: true });
+    },
+    writeFile: async (absolutePath: string, content: string) => {
+      const { root, relative } = findRootAndRelative(absolutePath, roots, { cwd });
+      await writeFileWithinRoot({
+        rootDir: root,
+        relativePath: relative,
+        data: content,
+        mkdir: true,
+      });
+    },
+  } as const;
+}
+
+function createHostEditOperationsForAllowedRoots(roots: string[]) {
+  const cwd = roots[0] ?? path.resolve(".");
+  return {
+    readFile: async (absolutePath: string) => {
+      const { root, relative } = findRootAndRelative(absolutePath, roots, { cwd });
+      const safeRead = await readFileWithinRoot({ rootDir: root, relativePath: relative });
+      return safeRead.buffer;
+    },
+    writeFile: async (absolutePath: string, content: string) => {
+      const { root, relative } = findRootAndRelative(absolutePath, roots, { cwd });
+      await writeFileWithinRoot({
+        rootDir: root,
+        relativePath: relative,
+        data: content,
+        mkdir: true,
+      });
+    },
+    access: async (absolutePath: string) => {
+      const { root, relative } = findRootAndRelative(absolutePath, roots, { cwd });
+      try {
+        const opened = await openFileWithinRoot({ rootDir: root, relativePath: relative });
+        await opened.handle.close().catch(() => {});
+      } catch (error) {
+        if (error instanceof SafeOpenError && error.code === "not-found") {
+          throw createFsAccessError("ENOENT", absolutePath);
+        }
+        throw error;
+      }
+    },
+  } as const;
+}
+
+function createHostReadOperationsForAllowedRoots(roots: string[]) {
+  const cwd = roots[0] ?? path.resolve(".");
+  return {
+    readFile: async (absolutePath: string) => {
+      const { root, relative } = findRootAndRelative(absolutePath, roots, { cwd });
+      const safeRead = await readFileWithinRoot({ rootDir: root, relativePath: relative });
+      return safeRead.buffer;
+    },
+    access: async (absolutePath: string) => {
+      const { root, relative } = findRootAndRelative(absolutePath, roots, { cwd });
+      try {
+        const opened = await openFileWithinRoot({ rootDir: root, relativePath: relative });
+        await opened.handle.close().catch(() => {});
+      } catch (error) {
+        if (error instanceof SafeOpenError && error.code === "not-found") {
+          throw createFsAccessError("ENOENT", absolutePath);
+        }
+        throw error;
+      }
+    },
+    detectImageMimeType: async (absolutePath: string) => {
+      const { root, relative } = findRootAndRelative(absolutePath, roots, { cwd });
+      const buffer = await readFileWithinRoot({ rootDir: root, relativePath: relative }).then(
+        (r) => r.buffer,
+      );
+      const mime = await detectMime({ buffer, filePath: absolutePath });
+      return mime && mime.startsWith("image/") ? mime : undefined;
     },
   } as const;
 }

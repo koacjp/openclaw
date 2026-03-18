@@ -1,5 +1,29 @@
 # Repository Guidelines
 
+## Workspace file layout (this agent)
+
+- **Workspace root** = this repo root. `agents.defaults.workspace` points here. Only files **directly under the workspace root** are used for bootstrap and context.
+- **USER.md, AGENTS.md, SOUL.md, TOOLS.md, HEARTBEAT.md, IDENTITY.md, memory/**  
+  Use and edit the copies at **workspace root** (e.g. `USER.md`, `memory/`). Do **not** use or rely on `.openclaw/workspace/` in this repo; those are unused duplicates.
+- **Skills**  
+  Loaded from **`skills/`** at workspace root only. Ignore `.openclaw/skills/` in this repo (not used by OpenClaw when workspace is the repo root).
+- **OpenClaw state の置き場所（このワークスペース）**  
+  設定・認証・セッションなどはすべて **リポジトリ直下の `.openclaw/`** に置く。`C:\Users\user\.openclaw`（既定の state ディレクトリ）は使わない。ゲートウェイ起動用の `.openclaw/gateway.cmd` で `OPENCLAW_STATE_DIR` と `OPENCLAW_CONFIG_PATH` をこの `.openclaw` に設定している。認証は `.openclaw/agents/main/agent/auth-profiles.json` を編集する。他環境へ移すときは、この `.openclaw` の内容をコピーすればよい。
+- **「No API key found for provider "google"」を出さないために**  
+  state は `src/config/paths.ts` の `resolveStateDir` で決まる。**ワークスペースルートに `.openclaw/openclaw.json` があるとき**（このリポジトリのように）、そのディレクトリが state として使われる（`OPENCLAW_STATE_DIR` や環境変数は不要）。組み込みゲートウェイや `pnpm openclaw gateway run` は、**カレントディレクトリがリポジトリルート**であれば自動でリポジトリの `.openclaw` を参照する。環境変数や再起動に依存しない。
+
+## Cursor でよく使うファイルを開く（人間向け）
+
+エクスプローラーで似た名前のファイルが多くて目的のファイルに届かないときは、**ファイル名で一発で開く**方法を使うとよい。
+
+1. **Ctrl+P**（Mac: Cmd+P）で「ファイルへ移動」を開く。
+2. 開きたいファイル名の一部を入力する。
+   - **OpenClaw の設定（Telegram トークンなど）:** `openclaw.json` と打つ → **`.openclaw/openclaw.json`** を選ぶ（リポジトリ直下の `.openclaw` フォルダ内）。
+   - **ブログ用スキル:** `blog` と打つ → `skills/blog/SKILL.md` を選ぶ。
+   - **エージェント向けルール（このファイル）:** `AGENTS.md` と打つ → ルートの `AGENTS.md` を選ぶ。
+
+候補が複数出たら、右側に表示されるパス（例: `.openclaw/openclaw.json`）で判断する。
+
 - Repo: https://github.com/openclaw/openclaw
 - In chat replies, file references must be repo-root relative only (example: `extensions/bluebubbles/src/channel.ts:80`); never absolute paths or `~/...`.
 - GitHub issues/comments/PR comments: use literal multiline strings or `-F - <<'EOF'` (or $'...') for real newlines; never embed "\\n".
@@ -139,6 +163,7 @@
 - Web provider stores creds at `~/.openclaw/credentials/`; rerun `openclaw login` if logged out.
 - Pi sessions live under `~/.openclaw/sessions/` by default; the base directory is not configurable.
 - Environment variables: see `~/.profile`.
+- **Agent filesystem scope:** To restrict read/write/edit to specific directories only, set `tools.fs.allowedRoots` in `~/.openclaw/openclaw.json` to an array of absolute paths (e.g. `["C:\\Users\\user\\.openclaw", "C:\\Users\\user\\OneDrive\\openclaw"]`). When set, the agent can access only paths under one of these roots; `apply_patch` uses the first root as cwd.
 - Never commit or publish real phone numbers, videos, or live configuration values. Use obviously fake placeholders in docs, tests, and examples.
 - Release flow: always read `docs/reference/RELEASING.md` and `docs/platforms/mac/release.md` before any release work; do not ask routine questions once those docs answer them.
 

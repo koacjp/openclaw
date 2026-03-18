@@ -304,6 +304,42 @@ Notes:
 - Create one bot per agent with BotFather and copy each token.
 - Tokens live in `channels.telegram.accounts.<id>.botToken` (default account can use `TELEGRAM_BOT_TOKEN`).
 
+#### Same workspace (e.g. blog bot + LINE bot)
+
+You can run two Telegram bots that share the **same workspace** (and thus the same USER.md, skills, and data). For example: one bot for blog management and one for LINE reply drafts. Each bot is a separate contact in Telegram; routing is by `accountId`.
+
+1. Create the second bot in BotFather and get its token.
+2. Ensure `agents.list` has two entries with the **same** `workspace` path and set `default: true` on the primary agent.
+3. Add two bindings: one binding per `channel: "telegram"` + `accountId` (e.g. `default` and `line-notif`).
+4. Under `channels.telegram.accounts`, add one entry per bot: `default` (existing bot token) and the new account key (e.g. `line-notif`) with the new bot token.
+
+Example (Windows path; use your real tokens):
+
+```json5
+{
+  agents: {
+    list: [
+      { id: "main", workspace: "C:\\Users\\user\\OneDrive\\openclaw", default: true },
+      { id: "line-bot", workspace: "C:\\Users\\user\\OneDrive\\openclaw" },
+    ],
+  },
+  bindings: [
+    { agentId: "main", match: { channel: "telegram", accountId: "default" } },
+    { agentId: "line-bot", match: { channel: "telegram", accountId: "line-notif" } },
+  ],
+  channels: {
+    telegram: {
+      accounts: {
+        default: { botToken: "YOUR_EXISTING_BOT_TOKEN" },
+        "line-notif": { botToken: "YOUR_NEW_LINE_BOT_TOKEN" },
+      },
+    },
+  },
+}
+```
+
+If you currently have a single bot via top-level `channels.telegram.botToken`, move that token into `channels.telegram.accounts.default.botToken` when adding the second account. After restart, the default bot stays the same; the new bot (@line444_bot or similar) will route to the `line-bot` agent.
+
 ### WhatsApp numbers per agent
 
 Link each account before starting the gateway:

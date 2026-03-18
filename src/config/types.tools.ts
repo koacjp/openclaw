@@ -279,6 +279,11 @@ export type FsToolsConfig = {
    * Default: false (unrestricted, matches legacy behavior).
    */
   workspaceOnly?: boolean;
+  /**
+   * When set, restrict filesystem tools to paths under any of these directories (resolved).
+   * Takes precedence over workspaceOnly: when non-empty, only these roots are allowed.
+   */
+  allowedRoots?: string[];
 };
 
 export type AgentToolsConfig = {

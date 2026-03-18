@@ -160,6 +160,23 @@ For VPS/cloud hosts, avoid third-party "1-click" marketplace images when possibl
   </Card>
 </CardGroup>
 
+## Cloud and VPS
+
+<CardGroup cols={2}>
+  <Card title="Oracle Cloud Free Tier" href="/install/oracle-cloud" icon="server">
+    Always Free VM: Ubuntu, Node, installer script, systemd.
+  </Card>
+  <Card title="GCP Compute Engine" href="/install/gcp" icon="server">
+    Docker-based 24/7 gateway on a GCP VM.
+  </Card>
+  <Card title="Fly.io" href="/install/fly" icon="server">
+    Deploy the gateway to Fly.io.
+  </Card>
+  <Card title="Hetzner" href="/install/hetzner" icon="server">
+    Run on a Hetzner VPS (Docker).
+  </Card>
+</CardGroup>
+
 ## After install
 
 Verify everything is working:

@@ -1,3 +1,4 @@
+import path from "node:path";
 import { codingTools, createReadTool, readTool } from "@mariozechner/pi-coding-agent";
 import type { OpenClawConfig } from "../config/config.js";
 import type { ToolLoopDetectionConfig } from "../config/types.tools.js";
@@ -31,6 +32,9 @@ import {
   createHostWorkspaceEditTool,
   createHostWorkspaceWriteTool,
   createOpenClawReadTool,
+  createReadToolWithAllowedRoots,
+  createHostWorkspaceWriteToolWithAllowedRoots,
+  createHostWorkspaceEditToolWithAllowedRoots,
   createSandboxedEditTool,
   createSandboxedReadTool,
   createSandboxedWriteTool,
@@ -308,11 +312,17 @@ export function createOpenClawCodingTools(options?: {
   const fsConfig = resolveToolFsConfig({ cfg: options?.config, agentId });
   const fsPolicy = createToolFsPolicy({
     workspaceOnly: fsConfig.workspaceOnly,
+    allowedRoots: fsConfig.allowedRoots,
   });
   const sandboxRoot = sandbox?.workspaceDir;
   const sandboxFsBridge = sandbox?.fsBridge;
   const allowWorkspaceWrites = sandbox?.workspaceAccess !== "ro";
   const workspaceRoot = resolveWorkspaceRoot(options?.workspaceDir);
+  const allowedRoots =
+    (fsPolicy.allowedRoots?.length ?? 0) > 0
+      ? fsPolicy.allowedRoots.map((r) => path.resolve(r))
+      : undefined;
+  const useAllowedRoots = allowedRoots && allowedRoots.length > 0;
   const workspaceOnly = fsPolicy.workspaceOnly;
   const applyPatchConfig = execConfig.applyPatch;
   // Secure by default: apply_patch is workspace-contained unless explicitly disabled.
@@ -349,6 +359,14 @@ export function createOpenClawCodingTools(options?: {
             : sandboxed,
         ];
       }
+      if (useAllowedRoots && allowedRoots) {
+        const freshReadTool = createReadToolWithAllowedRoots(allowedRoots);
+        const wrapped = createOpenClawReadTool(freshReadTool, {
+          modelContextWindowTokens: options?.modelContextWindowTokens,
+          imageSanitization,
+        });
+        return [wrapped];
+      }
       const freshReadTool = createReadTool(workspaceRoot);
       const wrapped = createOpenClawReadTool(freshReadTool, {
         modelContextWindowTokens: options?.modelContextWindowTokens,
@@ -363,12 +381,18 @@ export function createOpenClawCodingTools(options?: {
       if (sandboxRoot) {
         return [];
       }
+      if (useAllowedRoots && allowedRoots) {
+        return [createHostWorkspaceWriteToolWithAllowedRoots(allowedRoots)];
+      }
       const wrapped = createHostWorkspaceWriteTool(workspaceRoot, { workspaceOnly });
       return [workspaceOnly ? wrapToolWorkspaceRootGuard(wrapped, workspaceRoot) : wrapped];
     }
     if (tool.name === "edit") {
       if (sandboxRoot) {
         return [];
+      }
+      if (useAllowedRoots && allowedRoots) {
+        return [createHostWorkspaceEditToolWithAllowedRoots(allowedRoots)];
       }
       const wrapped = createHostWorkspaceEditTool(workspaceRoot, { workspaceOnly });
       return [workspaceOnly ? wrapToolWorkspaceRootGuard(wrapped, workspaceRoot) : wrapped];

@@ -47,4 +47,11 @@ describe("resolveEffectiveToolFsWorkspaceOnly", () => {
     };
     expect(resolveEffectiveToolFsWorkspaceOnly({ cfg, agentId: "main" })).toBe(true);
   });
+
+  it("returns true when tools.fs.allowedRoots is non-empty", () => {
+    const cfg: OpenClawConfig = {
+      tools: { fs: { allowedRoots: ["/allowed/a", "/allowed/b"] } },
+    };
+    expect(resolveEffectiveToolFsWorkspaceOnly({ cfg, agentId: "main" })).toBe(true);
+  });
 });

@@ -54,7 +54,7 @@ export function resolveNewStateDir(homedir: () => string = resolveDefaultHomeDir
 
 /**
  * State directory for mutable data (sessions, logs, caches).
- * Can be overridden via OPENCLAW_STATE_DIR.
+ * Can be overridden via OPENCLAW_STATE_DIR, or derived from OPENCLAW_CONFIG_PATH when that is set.
  * Default: ~/.openclaw
  */
 export function resolveStateDir(
@@ -65,6 +65,29 @@ export function resolveStateDir(
   const override = env.OPENCLAW_STATE_DIR?.trim() || env.CLAWDBOT_STATE_DIR?.trim();
   if (override) {
     return resolveUserPath(override, env, effectiveHomedir);
+  }
+  // When config path is set (e.g. by IDE or launcher to repo/.openclaw/openclaw.json), use its directory as state dir so auth/sessions live next to that config.
+  const configPath = env.OPENCLAW_CONFIG_PATH?.trim() || env.CLAWDBOT_CONFIG_PATH?.trim();
+  if (configPath) {
+    const resolved = resolveUserPath(configPath, env, effectiveHomedir);
+    if (resolved) {
+      return path.dirname(resolved);
+    }
+  }
+  // When running from a directory that contains .openclaw/openclaw.json (workspace root), use that as state dir so auth/sessions live next to the workspace config. Takes precedence over ~/.openclaw. Skip when OPENCLAW_HOME/CLAWDBOT_HOME are set or when caller passed a custom homedir (e.g. tests).
+  const explicitHomeOverride = env.OPENCLAW_HOME?.trim() || env.CLAWDBOT_HOME?.trim();
+  const usingDefaultHome =
+    path.resolve(effectiveHomedir()) === path.resolve(resolveRequiredHomeDir(env, os.homedir));
+  if (!explicitHomeOverride && usingDefaultHome) {
+    try {
+      const cwd = process.cwd();
+      const candidate = path.join(cwd, NEW_STATE_DIRNAME, CONFIG_FILENAME);
+      if (fs.existsSync(candidate)) {
+        return path.join(cwd, NEW_STATE_DIRNAME);
+      }
+    } catch {
+      // ignore
+    }
   }
   const newDir = newStateDir(effectiveHomedir);
   if (env.OPENCLAW_TEST_FAST === "1") {

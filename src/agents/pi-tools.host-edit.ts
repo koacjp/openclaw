@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type { AgentToolResult, AgentToolUpdateCallback } from "@mariozechner/pi-agent-core";
+import { findRootAndRelative } from "./path-policy.js";
 import type { AnyAgentTool } from "./pi-tools.types.js";
 
 /** Resolve path for host edit: expand ~ and resolve relative paths against root. */
@@ -22,6 +23,7 @@ function resolveHostEditPath(root: string, pathParam: string): string {
 export function wrapHostEditToolWithPostWriteRecovery(
   base: AnyAgentTool,
   root: string,
+  options?: { allowedRoots?: string[] },
 ): AnyAgentTool {
   return {
     ...base,
@@ -53,7 +55,13 @@ export function wrapHostEditToolWithPostWriteRecovery(
           throw err;
         }
         try {
-          const absolutePath = resolveHostEditPath(root, pathParam);
+          const absolutePath =
+            (options?.allowedRoots?.length ?? 0) > 0
+              ? (() => {
+                  const { root: r, relative: rel } = findRootAndRelative(pathParam, options!.allowedRoots!, { cwd: root });
+                  return path.resolve(r, rel);
+                })()
+              : resolveHostEditPath(root, pathParam);
           const content = await fs.readFile(absolutePath, "utf-8");
           // Only recover when the replacement likely occurred: newText is present and oldText
           // is no longer present. This avoids false success when upstream threw before writing

@@ -2,11 +2,14 @@ import { readConfigFileSnapshot, resolveGatewayPort } from "../config/config.js"
 import { copyToClipboard } from "../infra/clipboard.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { defaultRuntime } from "../runtime.js";
+import { formatCliCommand } from "../cli/command-format.js";
 import {
   detectBrowserOpenSupport,
   formatControlUiSshHint,
   openUrl,
+  probeGatewayReachable,
   resolveControlUiLinks,
+  waitForGatewayReachable,
 } from "./onboard-helpers.js";
 
 type DashboardOptions = {
@@ -42,6 +45,37 @@ export async function dashboardCommand(
 
   const copied = await copyToClipboard(dashboardUrl).catch(() => false);
   runtime.log(copied ? "Copied to clipboard." : "Copy to clipboard unavailable.");
+
+  // Quick probe to check if gateway is already up.
+  const quickProbe = await probeGatewayReachable({
+    url: links.wsUrl,
+    token: token || undefined,
+    timeoutMs: 1_000,
+  });
+
+  // If gateway is not reachable, wait a bit to handle the case where it is
+  // still starting up. If it never becomes reachable, abort with a clear error.
+  if (!quickProbe.ok) {
+    runtime.log("Gateway not detected. Waiting for it to start (up to 10s)...");
+    const waited = await waitForGatewayReachable({
+      url: links.wsUrl,
+      token: token || undefined,
+      deadlineMs: 10_000,
+      pollMs: 400,
+      probeTimeoutMs: 1_500,
+    });
+    if (!waited.ok) {
+      runtime.log(
+        [
+          "Gateway is not running. Start it first:",
+          `  ${formatCliCommand("openclaw gateway run")}`,
+          "Then open the dashboard again:",
+          `  ${formatCliCommand("openclaw dashboard")}`,
+        ].join("\n"),
+      );
+      return;
+    }
+  }
 
   let opened = false;
   let hint: string | undefined;
