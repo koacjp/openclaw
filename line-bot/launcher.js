@@ -43,7 +43,7 @@ async function launchMonitor(options = { headless: true, onNotification: null })
         ignoreDefaultArgs: ["--enable-automation", "--disable-extensions"],
         args: [
             "--disable-blink-features=AutomationControlled", // 自動操作フラグを隠す
-            "--start-maximized"
+            "--window-size=800,1000" // スクリーンショットに近いサイズに調整
         ],
         // オプションとして自動化フラグを排除
         // chromium.launchPersistentContext に直接設定できない場合があるが、args/ignoreDefaultArgsで対応
